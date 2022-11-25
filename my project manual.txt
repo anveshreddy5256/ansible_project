@@ -1,0 +1,183 @@
+launch 3 instances(ansible, web, db)in one time by giving no of instance count in the public subnet with keys enable all traffic enabled
+note: subnet is associated and internet gateway is added to the route in all the 3 instances
+select the ansible instance and connect as ec2-user and rest the 2 instances
+go to instance named ansible and install ansible package
+now type sudo su
+amazon-linux-extras install ansible2 -y and press enter it will install ansible packages 
+now i need to change host name
+cd /etc/hosts host
+it is a file and not a directory
+nano /etc/hosts and enter
+and go to web instance and copy the pvt ip and go to db instance and copy the pvt ip as below
+pvtip web
+pvtip db
+ctrl+x and yes enter
+ping web and press enter
+you will get a reply from web instance
+ping db 
+you will get a reply from db instance and to escape press ctrl+c
+cd /etc/ansible/
+i can find 3 files like ansible.cfg , hosts and roles(directory)
+nano hosts and enter and add the below lines on the top 
+web ansible_ssh_user=ec2-user ansible_private_key_file=/etc/ansible/key
+db ansible_ssh_user=ec2-user ansible_private_key_file=/etc/ansible/key and press ctrl+x and yes and press enter
+now iam going to create a key inside ansible directory
+to check the present working directory enter pwd command 
+output:/etc/ansible
+Now will create a key 
+nano key selected for that instance under keyname and press enter and go to keypair pem and copy the content and paste inside the file which is opened
+press ctrl+x and press enter or ctrl+ enter ctrl+x
+ls-la in this users and groups and other users is having the permission so we need to reduce the permission so type the below commands
+chmod 600 key and enter
+now try to connect 2 instances like web and db by the below commands
+ansible web -m ping and enter you will get a green color code having success at the top
+similarly ansible db -m ping and press enter you will get a green color code having success at the top
+and lets try for all the instances like web and db by typing the command below
+ansible all -m ping
+now you will get the two success msgs from both instance let's say web and db
+nano playbook.yml and press enter go to github playbook3.yml  and copy the code and paste below and ctrl+x and yes and enter
+clone the repository: command to clone
+- hosts: web
+  name: installing required part for webserver
+  become: yes
+  tasks:
+#install required package
+    - name: install required package for websever
+      yum:
+        name: '{{item}}'
+        state: present
+      loop:
+        - httpd
+        - php
+        - php-mysql
+        - git   
+#start webserver
+    - name: start webserver
+      service:
+        name: httpd
+        state: started
+#git hub repo clone
+    - name: clone repository to /var/www/html
+      git:
+        repo: https://github.com/mohammedashiqu/app-ecommerce_project.git
+        dest: /var/www/html
+#database prerequisite
+
+- hosts: db
+  name: database
+  become: yes 
+  tasks:
+#install mariadb
+    - name: install mariadb and git 
+      yum:
+        name: '{{item}}'
+        state: present
+      loop:
+        - mariadb
+        - mariadb-server
+        - git
+        - MySQL-python   why-ansible want to connect database instance ansible written in python language that's why we have installed MySQL-python only for automation other than we can user 3 above
+#start mariadb server
+    - name: start mariadb
+      service:
+        name: mariadb
+        state: started
+#create database on db
+    - name: create database on mariadb
+      mysql_db:
+        name: ecomdb
+        state: present
+#create user and password on udb
+    - name: create application user
+      mysql_user:
+        name: ecomuser
+        password: ecompassword
+        priv: '*.*:ALL,GRANT'
+        host: 172.31.46.51   here copied pvt ip of web instance Meaning: only this ip can connect to my database
+        state: present
+#add tables and producst on ecomdb
+    - name: create directory
+      shell: mkdir -p /ashiq
+    - name: add db
+      git:
+        repo: https://github.com/mohammedashiqu/app-ecommerce_project.git
+        dest: /ashiq
+    - name: addtable
+      shell: mysql -f < /ashiq/assets/db-load-script.sql
+#restart webserver and edit index file
+- hosts: web
+  name: restart web
+  become: yes
+  tasks:
+    - name: chnage local host name in index.html
+      shell: sed -i 's/172.20.1.101/172.31.40.69/g' /var/www/html/index.php  note:go to github and open the app ecommerce project and open the index.html file and go to the bottom section and you can able to find one ip addess i need to replace the ip address in index.html with the database pvt ip address of db instance.
+
+#chnage local host to ip   
+    - name: restart web
+      service:
+        name: httpd
+        state: restarted
+
+
+following this to explain the code inside the playbook.yml file
+go to the location of key1 and enter into the cmd mode and type ssh -i key1.pem ec2-user@publicip of ansible instance and press y and enter
+sudo su
+nano /etc/ansible/playbook.yml and press enter
+you will get a code so that we can explain about the code 
+
+continuation after the 38th line:
+==================
+now i will execute the playbook.yml file so type the command as below
+ansible-playbook /etc/ansible/playbook.yml and press enter
+first it is installing all the gathered parts
+first it will install httpd install 
+next it will install php
+next it will install php-mysql
+next it will install git
+then start webserver completed
+clone repository 
+gathering part for db
+installing mariabdb
+mariadbserver
+git
+start mariadb
+added db
+added table
+restarted web 
+gathering changes in the webserver
+restarted the web
+after executing all the tasks in yml file you will get and output below:
+db     :ok=8 (nothing but how many tasks are completed)  changed=7 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+web    :ok=7 (nothing but how many tasks are completed)  changed=5 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+
+now successfully completed  page
+
+now go to webserver public ip and paste in a browser and you can able to view the content inside
+
+i can execute the yum file again and again and is idempotent i.e is not overwritten.
+
+
+
+
+for suppose:
+in web instance: 
+cd /etc/www/html
+ls and press enter the following files will be displayed as below:
+assets(dir) css9(dir) fonts(dir) img(dir) index.php js(dir) README.md scss(dir) vendors(dir)
+rm -rf .git .gitignore and enter it will not uninstall bcx u don't have sudo priveliges
+in db instance:
+cd /ashiq/
+ls enter following below files will be displayed
+assets/ css/ fonts/ .git/ /img js/ scss/ vendors/
+rm -rf * .git .gitignore and enter it will not uninstall bcx u don't have sudo priveliges
+then place sudo before rm -rf * .git .gitignore
+ 
+even if i remove anything from web and db instance and if you run the yml file again  yum file will install all the things 
+which are deleted.
+
+
+
+
+
+
+
